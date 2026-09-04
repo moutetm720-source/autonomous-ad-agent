@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{{ title }} — Guide rapide</title>
+  <meta name="description" content="{{ meta_description | default('Guide et comparatif') }}">
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color:#111 }
+    header h1 { font-size: 1.6rem; }
+    .cta { background:#0b74de; color:#fff; padding:.8rem; display:inline-block; margin:1rem 0; text-decoration:none; border-radius:6px }
+    .box { border:1px solid #eee; padding:1rem; border-radius:6px; margin:1rem 0; background:#fbfbfb }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>{{ title }}</h1>
+    <p><em>{{ intro }}</em></p>
+  </header>
+
+  <section class="box">
+    <h2>Résumé</h2>
+    <p>{{ overview }}</p>
+  </section>
+
+  <section>
+    <h3>Avantages</h3>
+    <ul>
+      {% for p in pros %}
+      <li>{{ p }}</li>
+      {% endfor %}
+    </ul>
+    <h3>Inconvénients</h3>
+    <ul>
+      {% for c in cons %}
+      <li>{{ c }}</li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section>
+    <a class="cta" href="{{ affiliate_link }}" rel="nofollow noopener" target="_blank">Voir le produit recommandé</a>
+  </section>
+
+  <section>
+    <h3>FAQ</h3>
+    {% for f in faqs %}
+      <p><strong>{{ f.q }}</strong><br/>{{ f.a }}</p>
+    {% endfor %}
+  </section>
+
+  <footer>
+    <p>Article généré automatiquement — liens d'affiliation inclus.</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Site généré — index</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color:#111 }
+    a { color:#0b74de; text-decoration:none }
+    li { margin: .6rem 0 }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Articles récents</h1>
+    <p>Site généré automatiquement — version prototype.</p>
+  </header>
+  <main>
+    <ul>
+      {% for a in articles %}
+        <li><a href="{{ a.slug }}.html">{{ a.title }}</a> — <small>{{ a.meta_description }}</small></li>
+      {% endfor %}
+    </ul>
+  </main>
+  <footer>
+    <p>Généré par l'agent autonome prototype.</p>
+  </footer>
+</body>
+</html>
