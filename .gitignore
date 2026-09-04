@@ -1,0 +1,15 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Env / secrets
+.env
+
+# Sorties générées
+site/
+autonomous-ad-agent.zip
+
+# OS / éditeurs
+.DS_Store
