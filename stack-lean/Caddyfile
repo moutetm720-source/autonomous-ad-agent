@@ -1,0 +1,19 @@
+# Un seul port exposé, authentifié. Rien d'autre n'est accessible de l'extérieur.
+# Sans nom de domaine : commentez le bloc et utilisez `ssh -L 8080:localhost:8080`.
+:80 {
+	basic_auth {
+		{$CADDY_USER} {$CADDY_PASSWORD_HASH}
+	}
+
+	handle /v1/* {
+		reverse_proxy litellm:4000
+	}
+
+	handle /* {
+		reverse_proxy open-webui:8080
+	}
+
+	log {
+		output stdout
+	}
+}

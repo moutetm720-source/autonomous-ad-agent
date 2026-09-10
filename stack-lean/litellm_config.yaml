@@ -1,0 +1,53 @@
+# Routage des modèles. Un seul endpoint OpenAI-compatible pour tous vos agents.
+# Règle d'or : petit modèle par défaut, gros modèle sur demande explicite.
+
+model_list:
+  # --- Travail courant (brouillons, refactoring, tests, docs) : pas cher ---
+  - model_name: agence/rapide
+    litellm_params:
+      model: scaleway/qwen3.6-35b-a3b          # 0,29 $/M en entrée
+      api_base: https://api.scaleway.com/ai/v1
+      api_key: os.environ/SCALEWAY_API_KEY
+      max_tokens: 8192
+
+  - model_name: agence/rapide-alt
+    litellm_params:
+      model: mistral/codestral-latest          # spécialiste code, 256K de contexte
+      api_key: os.environ/MISTRAL_API_KEY
+      max_tokens: 8192
+
+  # --- Code frontalier (architecture, bugs durs, revue) : cher ---
+  - model_name: agence/expert
+    litellm_params:
+      model: scaleway/glm-5.2                  # 2,08 $/M en entrée
+      api_base: https://api.scaleway.com/ai/v1
+      api_key: os.environ/SCALEWAY_API_KEY
+      max_tokens: 16384
+
+  # --- Embeddings pour le RAG (indispensable : le plan initial l'avait oublié) ---
+  - model_name: scaleway/multilingual-e5-large
+    litellm_params:
+      model: scaleway/multilingual-e5-large
+      api_base: https://api.scaleway.com/ai/v1
+      api_key: os.environ/SCALEWAY_API_KEY
+
+  # --- Fallback local (profil `local`) : coût marginal nul ---
+  - model_name: agence/brouillon
+    litellm_params:
+      model: ollama/qwen2.5-coder:7b-instruct-q5_K_M
+      api_base: http://ollama:11434
+
+router_settings:
+  # Si le fournisseur principal échoue, on bascule : zéro interruption client.
+  fallbacks:
+    - agence/rapide: ["agence/rapide-alt", "agence/brouillon"]
+    - agence/expert: ["agence/rapide"]
+  num_retries: 2
+  timeout: 120
+
+litellm_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  drop_params: true
+  # Garde-fou budgétaire : on ne peut pas se réveiller avec 800 € de tokens.
+  max_budget: 120            # € / mois, à ajuster
+  budget_duration: 30d

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+venv/
+.env
+site/
+backups/
+qdrant_storage/
+open_webui_data/
+ollama_models/
+caddy_data/

@@ -1,0 +1,125 @@
+# =============================================================================
+# STACK « LEAN » — agence IA sans GPU, sans capex, 100% souverain
+# -----------------------------------------------------------------------------
+# Différences avec le plan initial (vLLM + DeepSeek-Coder-V2 + Langflow) :
+#   - AUCUN GPU : LiteLLM route vers des API open-weights hébergées dans l'UE
+#     (Scaleway Sovereign / Mistral). On paie au token, pas à l'heure.
+#   - AUCUN Langflow : l'orchestration vit dans le dépôt (scripts Python + CI),
+#     donc versionnée, reproductible, et gratuite.
+#   - Qdrant derrière une clé API, JAMAIS exposé sur Internet.
+#   - Un seul point d'entrée : Caddy (HTTPS auto + auth basique).
+#   - Profil optionnel `local` : petit modèle sur votre machine pour les brouillons
+#     et les embeddings, quand vous voudrez couper la facture tokens.
+#
+# Coût de fonctionnement : 0 € de fixe. Un VPS 2 vCPU / 4 Go suffit (~5 €/mois),
+# ou votre propre machine en local.
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Passerelle unique compatible OpenAI. Un seul endpoint, N fournisseurs.
+  # Permet de changer de modèle (Scaleway -> Mistral -> Ollama local) sans toucher
+  # au code des agents, et de plafonner le budget par clé.
+  # ---------------------------------------------------------------------------
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    container_name: agence-routeur
+    command: --config /app/config.yaml --port 4000
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml:ro
+    env_file: .env
+    expose:
+      - "4000"
+    restart: unless-stopped
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------------------
+  # Mémoire vectorielle (RAG : CDC, docs techniques, délibérations, RGPD).
+  # Clé API obligatoire + aucun port publié sur l'hôte.
+  # ---------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: agence-memoire
+    environment:
+      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:?générez une clé : openssl rand -hex 32}
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    expose:
+      - "6333"
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Interface de pilotage des agents.
+  # ---------------------------------------------------------------------------
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: agence-interface
+    environment:
+      - OPENAI_API_BASE_URL=http://litellm:4000/v1
+      - OPENAI_API_KEY=${LITELLM_MASTER_KEY}
+      - WEBUI_AUTH=true                 # jamais d'interface ouverte
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?générez une clé : openssl rand -hex 32}
+      - DEFAULT_MODELS=${DEFAULT_MODELS:-scaleway/qwen3.6-35b-a3b}
+      - RAG_EMBEDDING_ENGINE=openai
+      - RAG_OPENAI_API_BASE_URL=http://litellm:4000/v1
+      - RAG_OPENAI_API_KEY=${LITELLM_MASTER_KEY}
+      - RAG_OPENAI_EMBEDDING_MODEL=scaleway/multilingual-e5-large   # ou mistral/mistral-embed
+    volumes:
+      - ./open_webui_data:/app/backend/data
+    expose:
+      - "8080"
+    depends_on:
+      - litellm
+      - qdrant
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Reverse proxy : HTTPS automatique + auth basique = la seule porte d'entrée.
+  # En local, remplacez :8080 par votre domaine ; sans domaine, utilisez le
+  # tunnel SSH (ssh -R) plutôt que d'exposer un port.
+  # ---------------------------------------------------------------------------
+  caddy:
+    image: caddy:2
+    container_name: agence-portail
+    ports:
+      - "127.0.0.1:8080:80"     # écoute en local uniquement
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy_data:/data
+    env_file: .env
+    depends_on:
+      - litellm
+      - open-webui
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # PROFIL OPTIONNEL « local » : à activer PLUS TARD, quand le volume de tokens
+  # le justifie. docker compose --profile local up -d
+  # Un petit modèle quantifié suffit pour les brouillons, le formatage, les
+  # embeddings : c'est 80% des appels, donc ~80% d'économie sur les tokens.
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: agence-brouillons
+    profiles: ["local"]
+    volumes:
+      - ./ollama_models:/root/.ollama
+    expose:
+      - "11434"
+    restart: unless-stopped
+    logging: *default-logging
+    # décommenter pour utiliser un GPU déjà présent (pas de location) :
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
