@@ -1,0 +1,73 @@
+name: Qualité & Sécurité (déterministe)
+
+# Le plan initial confiait la QA à un « agent hacker éthique » exécuté par un LLM.
+# C'est non déterministe, coûteux et impossible à auditer. 90 % des contrôles
+# qu'on attend de lui sont des outils gratuits et reproductibles : c'est ce
+# workflow. Le LLM ne sert plus qu'à CORRIGER ce que ces outils ont trouvé.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  dart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Format
+        run: dart format --output=none --set-exit-if-changed .
+      - name: Analyse statique (bloque sur toute erreur, pas sur les infos)
+        run: flutter analyze --fatal-infos
+      - name: Tests + couverture
+        run: flutter test --coverage
+      - name: Seuil de couverture (70 %)
+        run: |
+          if command -v lcov >/dev/null; then
+            COV=$(lcov --summary coverage/lcov.info 2>/dev/null | grep -o '[0-9.]*%' | head -1 | tr -d '%')
+            echo "Couverture : ${COV}%"
+            awk -v c="${COV:-0}" 'BEGIN { exit (c >= 70 ? 0 : 1) }' \
+              || { echo "Couverture insuffisante (< 70 %)"; exit 1; }
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Secrets codés en dur
+        run: bash scripts/check_secrets.sh
+      - name: Scan d'historique (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Vulnérabilités connues (OSV)
+        run: |
+          dart pub global activate osv_scanner
+          dart pub global run osv_scanner:scan --path . || true
+      - name: Dépendances obsolètes
+        run: flutter pub outdated || true
+
+  # Décommenté quand le backend existe : analyse du conteneur et du DAG Docker.
+  # container:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: aquasecurity/trivy-action@master
+  #       with:
+  #         scan-type: fs
+  #         severity: HIGH,CRITICAL
+  #         exit-code: '1'
